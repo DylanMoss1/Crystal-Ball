@@ -18,7 +18,12 @@ int main(int argc, char **argv) {
     unsigned int deviceID = 0;
     cl_int platformSet = 0; // whether -p/-d were given explicitly; if not, auto-select.
     cl_int deviceSet = 0;
-    unsigned int numGroups = 16;
+    // When -g is given, globalSize = numGroups^2 work-items. When it is NOT given, the
+    // work-item count is auto-sized to the device's compute units (see below) so it is
+    // optimal on any GPU -- a fixed default can't be: a big globalSize starves a slow GPU
+    // (TDR-bounded chunks can't fill it) and a small one under-occupies a fast one.
+    unsigned int numGroups = 64;
+    cl_int groupsSet = 0;
     cl_char8 startingSeed;
     for (int i = 0; i < 8; i++) {
         startingSeed.s[i] = '\0';
@@ -30,7 +35,7 @@ int main(int argc, char **argv) {
     cl_int stopOnFirst = 0;
     for (int i = 0; i < argc; i++) {
         if (strcmp(argv[i], "-h")==0) {
-            printf_s("Valid command line arguments:\n-h        Shows this help dialog.\n-f <F>    Sets the filter used by Immolate to F. Defaults to erratic_flush_five.\n-j <J>    Passes a JSON search query to a query-aware filter (e.g. find_joker). See README.\n-J <F>    Like -j, but reads the JSON query from file F (avoids shell-quoting the query).\n--first   Stops the search as soon as one matching seed is found (prints exactly one).\n-q        Quiet mode: suppress all output except matching seeds (prints just <SEED>).\n-s <S>    Sets the starting seed to S. Defaults to empty seed. Use \"random\" for a random starting seed.\n-n <N>    Sets the number of seeds to search to N. Defaults to full seed pool.\n-c <C>    Sets the cutoff score for a seed to be printed to C. Defaults to 1.\n-p <P>    Sets the platform ID of the CL device being used to P. Defaults to 0.\n-d <D>    Sets the device ID of the CL device being used to D. Defaults to 0.\n-g <G>    Sets the number of thread groups to G. Defaults to 16. Increasing this might help Immolate run faster.\n\n--list_devices   Lists information about the detected CL devices.");
+            printf_s("Valid command line arguments:\n-h        Shows this help dialog.\n-f <F>    Sets the filter used by Immolate to F. Defaults to erratic_flush_five.\n-j <J>    Passes a JSON search query to a query-aware filter (e.g. find_joker). See README.\n-J <F>    Like -j, but reads the JSON query from file F (avoids shell-quoting the query).\n--first   Stops the search as soon as one matching seed is found (prints exactly one).\n-q        Quiet mode: suppress all output except matching seeds (prints just <SEED>).\n-s <S>    Sets the starting seed to S. Defaults to empty seed. Use \"random\" for a random starting seed.\n-n <N>    Sets the number of seeds to search to N. Defaults to full seed pool.\n-c <C>    Sets the cutoff score for a seed to be printed to C. Defaults to 1.\n-p <P>    Sets the platform ID of the CL device being used to P. Defaults to 0.\n-d <D>    Sets the device ID of the CL device being used to D. Defaults to 0.\n-g <G>    Sets the number of thread groups to G (globalSize = G*G work-items). Default: auto-sized to the GPU's compute units. Override only to tune.\n\n--list_devices   Lists information about the detected CL devices.");
             return 0;
         }
         if (strcmp(argv[i],  "-p")==0) {
@@ -75,6 +80,7 @@ int main(int argc, char **argv) {
         }
         if (strcmp(argv[i],  "-g")==0) {
             numGroups = atoi(argv[i+1]);
+            groupsSet = 1;
             i++;
         }
         if (strcmp(argv[i],  "-n")==0) {
@@ -267,8 +273,9 @@ int main(int argc, char **argv) {
     cl_context ctx = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
     clErrCheck(err, "clCreateContext - Creating OpenCL context");
  
-    // Create a command queue
-    cl_command_queue queue = clCreateCommandQueue(ctx, device, 0, &err);
+    // Create a command queue. Profiling is enabled so the chunked search loop can
+    // measure each launch's kernel time and size the next chunk to a TDR-safe target.
+    cl_command_queue queue = clCreateCommandQueue(ctx, device, CL_QUEUE_PROFILING_ENABLE, &err);
     clErrCheck(err, "clCreateCommandQueue - Creating OpenCL command queue");
 
     // Create + build the program, served from the on-disk binary cache when the
@@ -324,13 +331,72 @@ int main(int argc, char **argv) {
     err = clSetKernelArg(ssKernel, 7, sizeof(cl_int), &quiet);
     clErrCheck(err, "clSetKernelArg - Adding quiet argument");
 
-    // Execute OpenCL kernel
-    size_t globalSize = numGroups * numGroups;
-    size_t localSize = numGroups;
-    if (!quiet) printf_s("Starting searcher...\n");
+    // Work-item count (globalSize). Explicit -g => numGroups^2 (legacy knob). Otherwise
+    // auto-size to the device: ~512 work-items per compute unit saturates the GPU without
+    // overshooting (tuned on a 16-CU GTX 1650, which plateaus around 4k-8k work-items),
+    // and it scales straight to high-end parts (e.g. an RTX 4090's ~128 CUs => ~64k). The
+    // separate, time-bounded chunk loop below keeps each launch TDR-safe regardless.
+    size_t globalSize;
+    if (groupsSet) {
+        globalSize = (size_t)numGroups * numGroups;
+    } else {
+        cl_uint computeUnits = 0;
+        clGetDeviceInfo(device, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof computeUnits, &computeUnits, NULL);
+        if (computeUnits == 0) computeUnits = 8;
+        globalSize = (size_t)computeUnits * 512;
+        if (globalSize < 1024) globalSize = 1024;
+    }
+    // localSize NULL: let the driver pick the work-group size (avoids exceeding the
+    // kernel's max work-group size, and globalSize need not be a multiple of it). The
+    // kernel strides by global size, so correctness does not depend on the local size.
+    if (!quiet) printf_s("Starting searcher (%zu work-items)...\n", globalSize);
     clock_t begin = clock();
-    err = clEnqueueNDRangeKernel(queue, ssKernel, 1, NULL, &globalSize, &localSize, 0, NULL, NULL);
-    clErrCheck(err, "clEnqueueNDRangeKernel - Executing OpenCL kernel");
+
+    // Chunk sizes are ABSOLUTE seed counts (independent of globalSize), so a large
+    // globalSize can't inflate a launch past the GPU watchdog. Start tiny (TDR-safe on
+    // any GPU), then grow toward TARGET_NS, capped per step so a noisy first measurement
+    // can't overshoot into a multi-second launch.
+    const cl_ulong TARGET_NS = 200000000ULL; // ~0.2s/launch (<< a ~2s TDR)
+    const cl_long INIT_CHUNK = 1 << 13;       // 8192: tiny first launch
+    const cl_long MIN_CHUNK = 1 << 10;        // 1024
+    const cl_long MAX_CHUNK = 1 << 28;        // ~268M ceiling per launch
+    const double MAX_GROWTH = 8.0;            // at most 8x larger per launch
+    cl_long chunk = INIT_CHUNK;
+    cl_long offset = 0;
+    cl_int stopFlag = 0;
+    while (offset < numSeeds) {
+        cl_long thisChunk = (numSeeds - offset < chunk) ? (numSeeds - offset) : chunk;
+        err = clSetKernelArg(ssKernel, 1, sizeof(thisChunk), &thisChunk);
+        clErrCheck(err, "clSetKernelArg - Setting chunk size");
+        err = clSetKernelArg(ssKernel, 8, sizeof(offset), &offset);
+        clErrCheck(err, "clSetKernelArg - Setting seed offset");
+
+        cl_event ev;
+        err = clEnqueueNDRangeKernel(queue, ssKernel, 1, NULL, &globalSize, NULL, 0, NULL, &ev);
+        clErrCheck(err, "clEnqueueNDRangeKernel - Executing OpenCL kernel");
+        clFinish(queue);
+        offset += thisChunk;
+
+        // Size the next chunk toward TARGET_NS from this launch's measured kernel time.
+        cl_ulong t0 = 0, t1 = 0;
+        clGetEventProfilingInfo(ev, CL_PROFILING_COMMAND_START, sizeof t0, &t0, NULL);
+        clGetEventProfilingInfo(ev, CL_PROFILING_COMMAND_END, sizeof t1, &t1, NULL);
+        clReleaseEvent(ev);
+        if (t1 > t0) {
+            double ideal = (double)thisChunk * (double)TARGET_NS / (double)(t1 - t0);
+            double cap = (double)thisChunk * MAX_GROWTH;
+            if (ideal > cap) ideal = cap;
+            chunk = (cl_long)ideal;
+            if (chunk < MIN_CHUNK) chunk = MIN_CHUNK;
+            if (chunk > MAX_CHUNK) chunk = MAX_CHUNK;
+        }
+
+        // --first: stop the moment any chunk has claimed a match.
+        if (stopOnFirst) {
+            clEnqueueReadBuffer(queue, stopBuf, CL_TRUE, 0, sizeof(cl_int), &stopFlag, 0, NULL, NULL);
+            if (stopFlag) break;
+        }
+    }
 
     // Clean up
     err = clFlush(queue);

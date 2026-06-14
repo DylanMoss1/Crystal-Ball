@@ -40,7 +40,7 @@ def main():
     )
     ap.add_argument("--immolate", required=True, help="path to the Immolate binary")
     ap.add_argument("--filter", default="find_joker")
-    ap.add_argument("--interval", type=float, default=0.5, help="poll seconds")
+    ap.add_argument("--interval", type=float, default=0.1, help="poll seconds")
     ap.add_argument("--search-timeout", type=float, default=600.0)
     args = ap.parse_args()
 

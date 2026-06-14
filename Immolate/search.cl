@@ -1,8 +1,13 @@
 #pragma OPENCL EXTENSION cl_khr_global_int32_base_atomics : enable
 
-__kernel void search(char8 starting_seed, long num_seeds, __global long* filter_cutoff, __global int* query, int queryLen, volatile __global int* stop, int stopOnFirst, int quiet) {
+// num_seeds is the count for THIS launch (a chunk), and seed_offset is the chunk's
+// base index into the pool. The host re-launches with advancing seed_offset so the
+// whole search is split into many short launches -- each well under the OS GPU
+// watchdog (TDR) limit, which a single full-pool launch would exceed (freeze + a
+// CL_OUT_OF_RESOURCES crash). Persistent buffers (cutoff, stop) carry state across.
+__kernel void search(char8 starting_seed, long num_seeds, __global long* filter_cutoff, __global int* query, int queryLen, volatile __global int* stop, int stopOnFirst, int quiet, long seed_offset) {
     seed _seed = s_new_c8(starting_seed);
-    s_skip(&_seed, get_global_id(0));
+    s_skip(&_seed, seed_offset + get_global_id(0));
     for (long i = get_global_id(0); i < num_seeds; i+=get_global_size(0)) {
         // Early-exit: once any work-item has claimed the first match, every
         // other work-item bails here instead of scanning the rest of the pool.

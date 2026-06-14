@@ -22,9 +22,9 @@ local JOKER_NAMES = assert(SMODS.load_file("CrystalBall/src/joker_names.lua"))()
 --------------------------------------------------------------------------------
 
 mod.config = mod.config or {}
-mod.config.stake = mod.config.stake or 1
-mod.config.timeout = mod.config.timeout or 60 -- seconds to wait for the watcher
-mod.config.poll_frames = mod.config.poll_frames or 15
+mod.config.stake = 1
+mod.config.timeout = 240 -- seconds to wait for the watcher
+mod.config.poll_frames = 15
 
 local HANDSHAKE_DIR = "/Mods/CrystalBall/CrystalBallHandshake"
 local REQUEST = HANDSHAKE_DIR .. "/request.txt"
@@ -176,13 +176,16 @@ local function run_immolate_windows(query)
 	local bat = win(save .. "/" .. WIN_BAT)
 
 	-- Keep all the quoting in a .bat file (avoids the nested `cmd /c ""prog" args""`
-	-- escaping). The done marker is written only after Immolate exits, so its presence
-	-- means "finished" -- WIN_OUT may legitimately be empty (no matching seed).
+	-- escaping). The done marker holds Immolate's exit code, written only after it exits:
+	-- its presence means "finished", and the code lets mod.poll tell success (0, WIN_OUT
+	-- holds the seed -- possibly empty if none matched) from failure (e.g. Fatal CL Error
+	-- -5 / GPU timeout), so a crash is never mistaken for a seed. The `> "file" echo` form
+	-- avoids cmd reading `echo 0> file` as a stream-0 redirect.
 	love.filesystem.write(
 		WIN_BAT,
 		"@echo off\r\n"
 			.. string.format('"%s" -f %s --first -q -J "%s" > "%s"\r\n', exe, FILTER, qfile, out)
-			.. string.format('echo done> "%s"\r\n', done)
+			.. string.format('> "%s" echo %%errorlevel%%\r\n', done)
 	)
 
 	-- `start "" /b` detaches the .bat: cmd returns immediately, so the game never blocks.
@@ -318,16 +321,21 @@ function mod.poll()
 		return
 	end
 
-	-- Native-Windows inline path: once Immolate's done marker appears, translate its
-	-- output file into a RESPONSE so the shared handling below resolves it. The marker
-	-- means the search finished; an empty WIN_OUT means no matching seed.
-	if p.win_done and love.filesystem.read(p.win_done) then
-		local out = love.filesystem.read(p.win_out) or ""
-		local seed = out:match("%S+")
-		love.filesystem.write(RESPONSE, p.id .. "\n" .. (seed or "ERROR: no matching seed") .. "\n")
-		love.filesystem.remove(p.win_out)
-		love.filesystem.remove(p.win_done)
-		p.win_done = nil
+	-- Native-Windows inline path: once Immolate's done marker (its exit code) appears,
+	-- translate the output into a RESPONSE for the shared handling below. Only a clean
+	-- exit (0) AND a valid seed token count as success -- a nonzero exit (Fatal CL Error
+	-- -5 / GPU timeout) or junk output resolves as a failure, never a bogus seed.
+	if p.win_done then
+		local marker = love.filesystem.read(p.win_done)
+		if marker then
+			local code = marker:match("%-?%d+")
+			local seed = (love.filesystem.read(p.win_out) or ""):match("%S+")
+			local good = code == "0" and seed and seed:match("^[A-Z0-9]+$") and #seed <= 8
+			love.filesystem.write(RESPONSE, p.id .. "\n" .. (good and seed or "ERROR: search failed") .. "\n")
+			love.filesystem.remove(p.win_out)
+			love.filesystem.remove(p.win_done)
+			p.win_done = nil
+		end
 	end
 
 	local data = love.filesystem.read(RESPONSE)
@@ -435,17 +443,41 @@ function G.UIDEF.use_and_sell_buttons(card)
 	return _orig_use_and_sell(card)
 end
 
--- Force the hover info panel to the LEFT or RIGHT of our picker cards (the stock
--- align_h_popup puts it above/below, which collides with the grid rows and the Add
--- button). Side is chosen by screen half so the panel stays on-screen: cards in the
--- left half show their panel to the right ('cr'), right-half cards to the left ('cl').
+-- Our picker cards carry a win sticker (set in populate_joker_page) so players see what
+-- they've won with. A sticker also injects a SECOND tooltip box into the hover popup
+-- (card.lua:945 -> loc_vars.sticker -> common_events.lua info_queue), and a popup holding
+-- BOTH the joker description and that sticker box is what drives the side-popup flicker.
+-- Blank the sticker fields just for the popup-content build (restored immediately) so the
+-- tooltip omits the sticker box; Card:draw still renders the sticker sprite, since it
+-- reads these fields live at draw time (after they're restored here).
+local _orig_gen_ability_table = Card.generate_UIBox_ability_table
+function Card:generate_UIBox_ability_table(...)
+	if self.crystalball_grid or self.crystalball_sel then
+		local sticker, sticker_run = self.sticker, self.sticker_run
+		self.sticker, self.sticker_run = nil, nil
+		local tbl = _orig_gen_ability_table(self, ...)
+		self.sticker, self.sticker_run = sticker, sticker_run
+		return tbl
+	end
+	return _orig_gen_ability_table(self, ...)
+end
+
+-- Put the hover info panel to the LEFT or RIGHT of our picker cards (stock places it
+-- above/below, covering the grid row / Add button). The side is decided ONCE per card and
+-- cached so it can't flip as the card floats across screen centre: grid cards use their
+-- static column, others a one-shot T.x test at first hover.
 local _orig_align_h_popup = Card.align_h_popup
 function Card:align_h_popup()
 	if self.crystalball_grid or self.crystalball_sel then
 		local cfg = _orig_align_h_popup(self)
-		local card_cx = self.T.x + self.T.w / 2
-		local room_cx = G.ROOM.T.x + G.ROOM.T.w / 2
-		local right = card_cx < room_cx
+		if self.crystalball_popup_right == nil then
+			if self.crystalball_grid and self.rank then
+				self.crystalball_popup_right = ((self.rank - 1) % GRID_COLS) < GRID_COLS / 2
+			else
+				self.crystalball_popup_right = self.T.x + self.T.w / 2 < G.ROOM.T.x + G.ROOM.T.w / 2
+			end
+		end
+		local right = self.crystalball_popup_right
 		cfg.type = right and "cr" or "cl"
 		cfg.offset = { x = right and 0.1 or -0.1, y = 0 }
 		return cfg
@@ -611,7 +643,11 @@ local function grid_align_cards(self)
 			card.T.r = 0
 			-- Centre within the cell: smaller cards (e.g. Wee Joker carry a reduced
 			-- card.T.w/h) would otherwise sit in the cell's top-left corner.
-			card.T.x = self.T.x + c * cell_w + (cell_w - card.T.w) / 2 + card.shadow_parrallax.x / 30
+			-- NB: do NOT add card.shadow_parrallax.x here. That parallax is driven by the
+			-- hover tilt (the card leans toward the cursor); feeding it back into the card's
+			-- target X makes a hovered card's position depend on its own tilt, a lagged
+			-- feedback loop that wobbles the card -- and its glued info popup -- left/right.
+			card.T.x = self.T.x + c * cell_w + (cell_w - card.T.w) / 2
 			card.T.y = self.T.y + r * (cell_h + GRID_ROW_GAP) + (cell_h - card.T.h) / 2
 		end
 		card.rank = k
@@ -1141,8 +1177,12 @@ G.FUNCS.crystalball_step = function(e)
 		end
 	end
 	save_config()
-	-- No overlay rebuild: the value text live-binds to `disp` and the arrows grey via
-	-- crystalball_arrow_vis, so the page-cycle widget no longer re-pops on each press.
+	-- Rebuild the editor so the pressed arrow (a one_press node) re-arms: without a
+	-- rebuild it fires at most once (the value live-binds via `disp`, but the button
+	-- stays latched). This matches Edit/Delete/page buttons, which rebuild and so stay
+	-- clickable. instant=true suppresses the slide-in; the `disp` updates above are now
+	-- redundant but harmless.
+	mod.show_filter_editor(true)
 end
 
 -- Per-frame visual refresh for a stepper arrow: greys it (and its glyph) when the
