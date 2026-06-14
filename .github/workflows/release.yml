@@ -1,8 +1,8 @@
 name: Release
 
 # Builds the Immolate searcher for Linux and Windows and packages two mod bundles:
-#   - CrystalBall-windows.zip       drop-in: mod + immolate/Immolate.exe (no watcher)
-#   - CrystalBall-linux-proton.zip  mod + immolate/Immolate + watcher.py + launch.sh
+#   - CrystalBall-windows.zip       drop-in: mod + Immolate/Immolate.exe (no watcher)
+#   - CrystalBall-linux-proton.zip  mod + Immolate/Immolate + watcher.py + launch.sh
 # Every commit/PR builds + packages the bundles as workflow artifacts; pushing a
 # tag like v0.1.0 additionally publishes them as a GitHub Release.
 
@@ -31,15 +31,18 @@ jobs:
         run: |
           set -eux
           out=dist/CrystalBall
-          mkdir -p "$out/immolate"
+          mkdir -p "$out/Immolate"
           # Mod files (Lua UI + handshake) and the Linux/Proton runtime glue.
-          cp CrystalBall/CrystalBall.json CrystalBall/README.md CrystalBall/watcher.py CrystalBall/launch.sh "$out/"
+          cp CrystalBall.json README.md "$out/"
           cp -r CrystalBall/src "$out/"
+          # launch.sh + watcher.py live in the linux/ subfolder (see launch.sh).
+          mkdir -p "$out/linux"
+          cp CrystalBall/linux/launch.sh CrystalBall/linux/watcher.py "$out/linux/"
           # Searcher: binary + the .cl kernels it loads relative to its own dir.
-          cp Immolate/build/Immolate "$out/immolate/"
-          cp Immolate/search.cl "$out/immolate/"
-          cp -r Immolate/filters Immolate/lib "$out/immolate/"
-          chmod +x "$out/immolate/Immolate" "$out/launch.sh"
+          cp Immolate/build/Immolate "$out/Immolate/"
+          cp Immolate/search.cl "$out/Immolate/"
+          cp -r Immolate/filters Immolate/lib "$out/Immolate/"
+          chmod +x "$out/Immolate/Immolate" "$out/linux/launch.sh"
           (cd dist && zip -r ../CrystalBall-linux-proton.zip CrystalBall)
 
       - uses: actions/upload-artifact@v4
@@ -66,14 +69,14 @@ jobs:
         shell: pwsh
         run: |
           $out = "dist/CrystalBall"
-          New-Item -ItemType Directory -Force -Path "$out/immolate" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$out/Immolate" | Out-Null
           # Mod files only - no watcher.py, no launch.sh (drop-in).
-          Copy-Item CrystalBall/CrystalBall.json, CrystalBall/README.md "$out/"
+          Copy-Item CrystalBall.json, README.md "$out/"
           Copy-Item -Recurse CrystalBall/src "$out/"
           # Searcher: binary + the .cl kernels it loads relative to its own dir.
-          Copy-Item Immolate/build/Release/Immolate.exe "$out/immolate/"
-          Copy-Item Immolate/search.cl "$out/immolate/"
-          Copy-Item -Recurse Immolate/filters, Immolate/lib "$out/immolate/"
+          Copy-Item Immolate/build/Release/Immolate.exe "$out/Immolate/"
+          Copy-Item Immolate/search.cl "$out/Immolate/"
+          Copy-Item -Recurse Immolate/filters, Immolate/lib "$out/Immolate/"
           Compress-Archive -Path "$out" -DestinationPath CrystalBall-windows.zip
 
       - uses: actions/upload-artifact@v4

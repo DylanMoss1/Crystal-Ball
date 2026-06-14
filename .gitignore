@@ -4,6 +4,9 @@ build/
 # Compiled Immolate searcher binary (built from Immolate/ source)
 Immolate/Immolate
 
+# Temporary handshake directory
+CrystalBallHandshake/
+
 # Vendored OpenCL headers — build links system OpenCL (find_package(OpenCL)),
 # so these are editor-only and not committed.
 Immolate/vendor/

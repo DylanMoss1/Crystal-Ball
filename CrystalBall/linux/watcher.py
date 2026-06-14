@@ -48,8 +48,11 @@ def main():
     req_path = os.path.join(args.dir, "request.txt")
     resp_path = os.path.join(args.dir, "response.txt")
 
-    os.remove(req_path)
-    os.remove(resp_path)
+    if os.path.exists(req_path):
+        os.remove(req_path)
+
+    if os.path.exists(resp_path):
+        os.remove(resp_path)
 
     last_id = None
     print(f"[CrystalBall] watching {req_path}\n[CrystalBall] immolate: {args.immolate}")

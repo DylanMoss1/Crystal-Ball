@@ -14,9 +14,9 @@ it. The in-game UI builds a query; an out-of-process searcher does the brute-for
 
 ```
 Balatro + CrystalBall (Lua)
-   │  writes a JSON query to <LOVE save dir>/CrystalBallBackendCommunication/
+   │  writes a JSON query to <LOVE save dir>/Mods/CrystalBall/CrystalBallHandshake/
    ▼
-watcher.py            (started by CrystalBall/launch.sh as a Steam launch wrapper)
+watcher.py            (started by CrystalBall/linux/launch.sh as a Steam launch wrapper)
    │  runs the searcher
    ▼
 Immolate binary       (built from Immolate/)
@@ -40,8 +40,8 @@ two bundles when a `v*` tag is pushed. Both need an OpenCL runtime (any GPU driv
 
 | Bundle | Contents | How the search runs |
 |--------|----------|---------------------|
-| `CrystalBall-windows.zip` | mod + `immolate/Immolate.exe` | mod runs the binary directly (no watcher) |
-| `CrystalBall-linux-proton.zip` | mod + `immolate/Immolate` + `watcher.py` + `launch.sh` | host watcher runs the binary, file handshake |
+| `CrystalBall-windows.zip` | mod + `Immolate/Immolate.exe` | mod runs the binary directly (no watcher) |
+| `CrystalBall-linux-proton.zip` | mod + `Immolate/Immolate` + `watcher.py` + `launch.sh` | host watcher runs the binary, file handshake |
 
 Cutting a release:
 
@@ -52,11 +52,12 @@ git tag v0.1.0 && git push origin v0.1.0
 ## Install the mod
 
 **Windows** — unzip `CrystalBall-windows.zip` into Balatro's `Mods/` directory
-(Steamodded required). That's it; the mod execs `immolate/Immolate.exe` itself.
+(Steamodded required). That's it; the mod execs `Immolate/Immolate.exe` itself.
 
 **Linux/Proton** — unzip `CrystalBall-linux-proton.zip` into `Mods/`, then add the
-launch wrapper from `CrystalBall/launch.sh` to the game's Steam launch options so the
-watcher runs alongside the game (the game can't exec the host binary under Proton).
+launch wrapper from `CrystalBall/linux/launch.sh` to the game's Steam launch options
+so the watcher runs alongside the game (the game can't exec the host binary under
+Proton).
 
 ## Immolate subtree
 

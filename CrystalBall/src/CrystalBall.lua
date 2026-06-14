@@ -7,7 +7,7 @@
 ---
 ---   mod  -> writes  <savedir>/CrystalBallBackendCommunication/request.txt   (id + query JSON)
 ---   host watcher    runs Immolate, writes response.txt (id + seed)
----   mod  <- polls   <savedir>/CrystalBallBackendCommunication/response.txt   then Game:start_run
+---   mod  <- pollsMods/CrystalBall/   <savedir>/CrystalBallBackendCommunication/response.txt   then Game:start_run
 ---
 --- This is identical on Linux and Windows; only the watcher's paths differ.
 
@@ -15,7 +15,7 @@ local mod = SMODS.current_mod
 
 -- Map: Balatro joker center key (e.g. "j_blueprint") -> Immolate enum name
 -- (e.g. "Blueprint"), the exact string item_from_name() accepts. See src/joker_names.lua.
-local JOKER_NAMES = assert(SMODS.load_file("src/joker_names.lua"))()
+local JOKER_NAMES = assert(SMODS.load_file("CrystalBall/src/joker_names.lua"))()
 
 --------------------------------------------------------------------------------
 -- Config
@@ -26,7 +26,7 @@ mod.config.stake = mod.config.stake or 1
 mod.config.timeout = mod.config.timeout or 60 -- seconds to wait for the watcher
 mod.config.poll_frames = mod.config.poll_frames or 15
 
-local HANDSHAKE_DIR = "CrystalBallBackendCommunication"
+local HANDSHAKE_DIR = "/Mods/CrystalBall/CrystalBallHandshake"
 local REQUEST = HANDSHAKE_DIR .. "/request.txt"
 local RESPONSE = HANDSHAKE_DIR .. "/response.txt"
 
@@ -44,8 +44,7 @@ if not mod.config.clauses and mod.config.target_jokers then
 	mod.config.target_jokers = nil
 end
 
-mod.config.clauses = mod.config.clauses
-	or { { jokers = { "j_blueprint" }, minAnte = 1, maxAnte = 1, atLeast = 1 } }
+mod.config.clauses = mod.config.clauses or {}
 
 -- A blank clause (used when adding a new row).
 local function new_clause()
@@ -134,6 +133,21 @@ end
 local req_counter = 0
 local FILTER = "find_joker" -- query-aware Immolate filter (matches watcher.py default)
 
+-- True only on *native* Windows. Under Proton jit.os is also "Windows" (the game is a
+-- Wine process and LuaJIT reports its compile-time target), so we further check the
+-- username in the save dir. From inside Wine getSaveDirectory() returns the Wine view
+-- (C:/users/steamuser/AppData/Roaming/Balatro) -- the host-side drive_c/compatdata
+-- components are not visible -- but Proton always runs as the fixed user "steamuser",
+-- whereas native Windows uses the real account name. Native Windows => inline exec;
+-- Proton => fall through to the host watcher, which can reach the GPU.
+local function is_native_windows()
+	if jit.os ~= "Windows" then
+		return false
+	end
+	local save = love.filesystem.getSaveDirectory():lower()
+	return not save:find("/users/steamuser/", 1, true)
+end
+
 -- Windows ships no watcher: the mod runs Immolate.exe itself. io.popen needs a real
 -- OS path (not a love.filesystem virtual one) and goes through cmd.exe, so paths use
 -- backslashes and get quoted; the JSON query is passed via a file (-J) to dodge
@@ -145,7 +159,7 @@ local function run_immolate_windows(query)
 	local function win(p)
 		return (p:gsub("/", "\\"))
 	end
-	local exe = win(save .. "/Mods/CrystalBall/immolate/Immolate.exe")
+	local exe = win(save .. "/Mods/CrystalBall/Immolate/Immolate.exe")
 	local qfile = win(save .. "/" .. HANDSHAKE_DIR .. "/query.json")
 
 	-- cmd.exe strips the outer quotes of a quoted-program command, so the whole
@@ -178,7 +192,7 @@ function mod.request_seed(criteria)
 	love.filesystem.write(REQUEST, id .. "\n" .. query .. "\n")
 	mod.pending = { id = id, frames = 0, started = os.time() }
 
-	if jit.os == "Windows" then
+	if is_native_windows() then
 		-- No watcher: do the watcher's job inline, then let mod.poll pick it up.
 		local seed, err = run_immolate_windows(query)
 		love.filesystem.write(RESPONSE, id .. "\n" .. (seed or ("ERROR: " .. err)) .. "\n")
@@ -283,6 +297,9 @@ function mod.poll()
 	end
 
 	local data = love.filesystem.read(RESPONSE)
+	print("==================")
+	print(data)
+	print("==================")
 	if data then
 		local rid, payload = data:match("^(%S+)%s*\n(.-)%s*$")
 		if rid == p.id then
@@ -487,8 +504,8 @@ G.FUNCS.crystalball_remove_card = function(e)
 	end
 	local area = card.area
 	if area then
-		local rc = area:remove_card(card)
-		;(rc or card):remove()
+		local rc = area:remove_card(card);
+		(rc or card):remove()
 	else
 		card:remove()
 	end
@@ -904,7 +921,15 @@ local function stepper(label, cl, kind, disp)
 					step_arrow("<", cl, kind, -1, disp),
 					{
 						n = G.UIT.C,
-						config = { align = "cm", minw = 0.75, minh = 0.55, r = 0.1, colour = G.C.RED, emboss = 0.1, padding = 0.05 },
+						config = {
+							align = "cm",
+							minw = 0.75,
+							minh = 0.55,
+							r = 0.1,
+							colour = G.C.RED,
+							emboss = 0.1,
+							padding = 0.05,
+						},
 						nodes = {
 							{
 								n = G.UIT.R,
@@ -954,7 +979,14 @@ local function build_clause_row(cl, idx)
 			-- joker line (left). C sibling so it flows horizontally beside the controls.
 			{
 				n = G.UIT.C,
-				config = { align = "cm", minh = PREVIEW_SCALE * G.CARD_H, minw = 2, r = 0.1, colour = G.C.UI.TRANSPARENT_DARK, padding = 0.05 },
+				config = {
+					align = "cm",
+					minh = PREVIEW_SCALE * G.CARD_H,
+					minw = 2,
+					r = 0.1,
+					colour = G.C.UI.TRANSPARENT_DARK,
+					padding = 0.05,
+				},
 				nodes = { line_node },
 			},
 			-- controls (right). C sibling => sits to the right of the preview; its two
@@ -995,7 +1027,10 @@ function mod.show_filter_editor(instant)
 			n = G.UIT.R,
 			config = { align = "cm", padding = 0.02 },
 			nodes = {
-				{ n = G.UIT.T, config = { text = "Seed filter (all rows must match)", scale = 0.6, colour = G.C.UI.TEXT_LIGHT } },
+				{
+					n = G.UIT.T,
+					config = { text = "Seed filter (all rows must match)", scale = 0.6, colour = G.C.UI.TEXT_LIGHT },
+				},
 			},
 		},
 	}
