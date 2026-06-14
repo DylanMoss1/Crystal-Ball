@@ -71,6 +71,16 @@ void s_print_rank(seed* s, long rank) {
     text s_str = s_to_string(s);
     printf("%s (%li)\n",s_str.str,rank);
 }
+// Portable result-line printer. Kernel-side printf("%s") of a __private string
+// is unsupported on some OpenCL drivers (it prints "(null)" and can desync the
+// remaining varargs); emit per character with %c, which every printf supports
+// (see print_text). quiet => just the seed; otherwise append " (<score>)".
+void s_print_line(seed* s, long score, int quiet) {
+    text str = s_to_string(s);
+    for (int i = 0; i < str.len; i++) printf("%c", str.str[i]);
+    if (quiet) printf("\n");
+    else printf(" (%li)\n", score);
+}
 void s_next(seed* s) {
     s->data[s->len-1] = (s->data[s->len-1]+1)%NUM_CHARS;
     int carry = s->data[s->len-1] == 0;

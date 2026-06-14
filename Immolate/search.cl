@@ -21,13 +21,17 @@ __kernel void search(char8 starting_seed, long num_seeds, __global long* filter_
             if (stopOnFirst) {
                 // Claim the single match: only the first work-item to flip the
                 // flag prints, so exactly one seed is reported before we stop.
+                // Single writer (the cmpxchg winner), so the per-character print in
+                // s_print_line can't interleave -- safe to use the portable printer
+                // that avoids printf("%s") (broken on some drivers; see s_print_line).
                 if (atomic_cmpxchg(stop, 0, 1) == 0) {
-                    text s_str = s_to_string(&_seed);
-                    if (quiet) printf("%s\n", s_str.str);
-                    else printf("%s (%li)\n", s_str.str, score);
+                    s_print_line(&_seed, score, quiet);
                 }
                 return;
             }
+            // Bulk mode: many work-items may print concurrently, so keep the single
+            // printf per match (per-char would interleave). NB %s is unsupported on
+            // some drivers -- prefer --first (above) there, or print host-side.
             text s_str = s_to_string(&_seed);
             if (quiet) printf("%s\n", s_str.str);
             else printf("%s (%li)\n", s_str.str, score);
