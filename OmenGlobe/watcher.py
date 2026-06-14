@@ -11,7 +11,7 @@ Handshake files (line-based, no JSON parsing needed here):
 Example (Proton/Linux):
     python3 watcher.py \\
       --immolate ../Immolate/Immolate \\
-      --dir "$HOME/.local/share/Steam/steamapps/compatdata/2379780/pfx/drive_c/users/steamuser/AppData/Roaming/Balatro/OmenGlobe"
+      --dir "$HOME/.local/share/Steam/steamapps/compatdata/2379780/pfx/drive_c/users/steamuser/AppData/Roaming/Balatro/OmenGlobeBackendCommunication"
 """
 
 import argparse

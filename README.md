@@ -14,7 +14,7 @@ it. The in-game UI builds a query; an out-of-process searcher does the brute-for
 
 ```
 Balatro + OmenGlobe (Lua)
-   │  writes a JSON query to <LOVE save dir>/OmenGlobe/
+   │  writes a JSON query to <LOVE save dir>/OmenGlobeBackendCommunication/
    ▼
 watcher.py            (started by OmenGlobe/launch.sh as a Steam launch wrapper)
    │  runs the searcher

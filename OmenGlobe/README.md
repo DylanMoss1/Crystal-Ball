@@ -7,9 +7,9 @@ The mod can't run Immolate itself portably (under Proton the game is a Windows
 process), so it does a **file handshake** with an external `watcher.py` on the host:
 
 ```
-mod   --writes-->  <savedir>/OmenGlobe/request.txt    id + query JSON
+mod   --writes-->  <savedir>/OmenGlobeBackendCommunication/request.txt    id + query JSON
 watcher           runs Immolate, --writes--> response.txt   id + seed
-mod   <--polls--   <savedir>/OmenGlobe/response.txt    then Game:start_run
+mod   <--polls--   <savedir>/OmenGlobeBackendCommunication/response.txt    then Game:start_run
 ```
 
 Identical on Linux and Windows — only the watcher's paths differ.
@@ -52,24 +52,24 @@ the watcher, runs the game, and kills the watcher on exit.
 <details><summary>Manual / non-Steam invocation</summary>
 
 If you don't launch via Steam, run the watcher yourself. Point `--dir` at the
-`OmenGlobe` folder inside the LÖVE **save directory**:
+`OmenGlobeBackendCommunication` folder inside the LÖVE **save directory**:
 
 | Host | Save dir |
 |------|----------|
-| Steam + Proton | `…/steamapps/compatdata/2379780/pfx/drive_c/users/steamuser/AppData/Roaming/Balatro/OmenGlobe` |
-| Native Linux | `~/.local/share/Balatro/OmenGlobe` |
-| Native Windows | `%APPDATA%\Balatro\OmenGlobe` |
+| Steam + Proton | `…/steamapps/compatdata/2379780/pfx/drive_c/users/steamuser/AppData/Roaming/Balatro/OmenGlobeBackendCommunication` |
+| Native Linux | `~/.local/share/Balatro/OmenGlobeBackendCommunication` |
+| Native Windows | `%APPDATA%\Balatro\OmenGlobeBackendCommunication` |
 
 The exact path is logged once at mod load — search the Balatro/Lovely log for
 `[OmenGlobe] handshake dir:`.
 
 ```sh
 python3 watcher.py --immolate ./Immolate \
-  --dir "$HOME/.local/share/Steam/steamapps/compatdata/2379780/pfx/drive_c/users/steamuser/AppData/Roaming/Balatro/OmenGlobe"
+  --dir "$HOME/.local/share/Steam/steamapps/compatdata/2379780/pfx/drive_c/users/steamuser/AppData/Roaming/Balatro/OmenGlobeBackendCommunication"
 ```
 
 ```powershell
-python watcher.py --immolate .\Immolate.exe --dir "$env:APPDATA\Balatro\OmenGlobe"
+python watcher.py --immolate .\Immolate.exe --dir "$env:APPDATA\Balatro\OmenGlobeBackendCommunication"
 ```
 </details>
 

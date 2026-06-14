@@ -5,9 +5,9 @@
 --- the game, especially under Proton). Instead it does a file handshake with an
 --- external `watcher.py` running on the host OS:
 ---
----   mod  -> writes  <savedir>/OmenGlobe/request.txt   (id + query JSON)
+---   mod  -> writes  <savedir>/OmenGlobeBackendCommunication/request.txt   (id + query JSON)
 ---   host watcher    runs Immolate, writes response.txt (id + seed)
----   mod  <- polls   <savedir>/OmenGlobe/response.txt   then Game:start_run
+---   mod  <- polls   <savedir>/OmenGlobeBackendCommunication/response.txt   then Game:start_run
 ---
 --- This is identical on Linux and Windows; only the watcher's paths differ.
 
@@ -26,7 +26,7 @@ mod.config.stake = mod.config.stake or 1
 mod.config.timeout = mod.config.timeout or 60 -- seconds to wait for the watcher
 mod.config.poll_frames = mod.config.poll_frames or 15
 
-local HANDSHAKE_DIR = "OmenGlobe"
+local HANDSHAKE_DIR = "OmenGlobeBackendCommunication"
 local REQUEST = HANDSHAKE_DIR .. "/request.txt"
 local RESPONSE = HANDSHAKE_DIR .. "/response.txt"
 

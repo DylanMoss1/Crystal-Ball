@@ -25,7 +25,7 @@ if [[ -n "${STEAM_COMPAT_DATA_PATH:-}" ]]; then
 else
     SAVE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/Balatro"
 fi
-HANDSHAKE_DIR="$SAVE_DIR/OmenGlobe"
+HANDSHAKE_DIR="$SAVE_DIR/OmenGlobeBackendCommunication"
 
 # Start the watcher only if both assets are present; never block the game launch.
 WPID=""
