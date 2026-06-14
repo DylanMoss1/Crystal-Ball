@@ -1,0 +1,17 @@
+# Build artifacts
+build/
+*.o
+# Compiled Immolate searcher binary (built from Immolate/ source)
+Immolate/Immolate
+
+# Vendored OpenCL headers — build links system OpenCL (find_package(OpenCL)),
+# so these are editor-only and not committed.
+Immolate/vendor/
+
+# Python
+__pycache__/
+*.pyc
+
+# Editor / agent state
+.claude/
+*.tmp

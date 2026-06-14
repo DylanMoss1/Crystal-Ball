@@ -1,0 +1,12 @@
+{
+    "id": "SeedFinder",
+    "name": "Seed Finder",
+    "display_name": "Seed Finder",
+    "author": ["Dylan"],
+    "description": "Finds a seed matching structured criteria using the Immolate seed searcher, then starts a run on it.",
+    "prefix": "seedfinder",
+    "main_file": "src/SeedFinder.lua",
+    "priority": 0,
+    "version": "0.1.0",
+    "dependencies": ["Steamodded (>=1.0.0~BETA-0400a)"]
+}
