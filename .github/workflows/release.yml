@@ -3,12 +3,14 @@ name: Release
 # Builds the Immolate searcher for Linux and Windows and packages two mod bundles:
 #   - CrystalBall-windows.zip       drop-in: mod + immolate/Immolate.exe (no watcher)
 #   - CrystalBall-linux-proton.zip  mod + immolate/Immolate + watcher.py + launch.sh
-# Pushing a tag like v0.1.0 publishes them as a GitHub Release; manual runs just
-# upload the bundles as workflow artifacts.
+# Every commit/PR builds + packages the bundles as workflow artifacts; pushing a
+# tag like v0.1.0 additionally publishes them as a GitHub Release.
 
 on:
   push:
-    tags: ["v*"]
+    branches: ["**"] # build + package on every commit (artifacts only)
+    tags: ["v*"] # tags additionally publish a GitHub Release
+  pull_request:
   workflow_dispatch:
 
 jobs:
