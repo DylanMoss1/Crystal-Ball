@@ -1,0 +1,18 @@
+CompileFlags:
+  Add:
+    - -I..
+---
+# lib/*.cl are fragments concatenated by immolate.cl; force-feed the version
+# macros + util.cl so V_AT_MOST etc. resolve. Skip immolate.cl, which already
+# pulls util.cl in itself (force-including would double-define its types).
+If:
+  PathExclude: .*immolate\.cl
+CompileFlags:
+  Add:
+    - -DVER1=1
+    - -DVER2=0
+    - -DVER3=1
+    - -DVER4=6
+    - -DGAME_VERSION
+    - -include
+    - util.cl

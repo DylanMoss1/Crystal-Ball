@@ -1,0 +1,16 @@
+# Matches the existing Immolate style: 4-space indent, attached `type* ptr`,
+# K&R braces, no line-length reflow.
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 0
+DerivePointerAlignment: false
+PointerAlignment: Left
+BreakBeforeBraces: Attach
+SpaceBeforeParens: ControlStatements
+AllowShortIfStatementsOnASingleLine: true
+AllowShortBlocksOnASingleLine: Never
+AllowShortFunctionsOnASingleLine: None
+AllowShortLoopsOnASingleLine: false
+IndentPPDirectives: BeforeHash

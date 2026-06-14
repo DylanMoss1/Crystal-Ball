@@ -1,9 +1,17 @@
 #include "lib/immolate.h"
+#include "query_parse.h"
 #include <time.h>
 int main(int argc, char **argv) {
     
+    // Detect quiet mode early so even the banner can be suppressed. In quiet
+    // mode the only stdout is the matching seed(s); see -q below.
+    cl_int quiet = 0;
+    for (int qi = 0; qi < argc; qi++) {
+        if (strcmp(argv[qi], "-q") == 0) quiet = 1;
+    }
+
     // Print version
-    printf_s("Immolate Beta v1.0.1f.1\n");
+    if (!quiet) printf_s("Immolate Beta v1.0.1f.1\n");
 
     // Handle CLI arguments
     unsigned int platformID = 0;
@@ -16,9 +24,11 @@ int main(int argc, char **argv) {
     cl_long numSeeds = 2318107019761;
     cl_long cutoff = 1;
     char* filter = "erratic_flush_five";
+    char* queryJson = NULL;
+    cl_int stopOnFirst = 0;
     for (int i = 0; i < argc; i++) {
         if (strcmp(argv[i], "-h")==0) {
-            printf_s("Valid command line arguments:\n-h        Shows this help dialog.\n-f <F>    Sets the filter used by Immolate to F. Defaults to erratic_flush_five.\n-s <S>    Sets the starting seed to S. Defaults to empty seed. Use \"random\" for a random starting seed.\n-n <N>    Sets the number of seeds to search to N. Defaults to full seed pool.\n-c <C>    Sets the cutoff score for a seed to be printed to C. Defaults to 1.\n-p <P>    Sets the platform ID of the CL device being used to P. Defaults to 0.\n-d <D>    Sets the device ID of the CL device being used to D. Defaults to 0.\n-g <G>    Sets the number of thread groups to G. Defaults to 16. Increasing this might help Immolate run faster.\n\n--list_devices   Lists information about the detected CL devices.");
+            printf_s("Valid command line arguments:\n-h        Shows this help dialog.\n-f <F>    Sets the filter used by Immolate to F. Defaults to erratic_flush_five.\n-j <J>    Passes a JSON search query to a query-aware filter (e.g. find_joker). See README.\n--first   Stops the search as soon as one matching seed is found (prints exactly one).\n-q        Quiet mode: suppress all output except matching seeds (prints just <SEED>).\n-s <S>    Sets the starting seed to S. Defaults to empty seed. Use \"random\" for a random starting seed.\n-n <N>    Sets the number of seeds to search to N. Defaults to full seed pool.\n-c <C>    Sets the cutoff score for a seed to be printed to C. Defaults to 1.\n-p <P>    Sets the platform ID of the CL device being used to P. Defaults to 0.\n-d <D>    Sets the device ID of the CL device being used to D. Defaults to 0.\n-g <G>    Sets the number of thread groups to G. Defaults to 16. Increasing this might help Immolate run faster.\n\n--list_devices   Lists information about the detected CL devices.");
             return 0;
         }
         if (strcmp(argv[i],  "-p")==0) {
@@ -28,6 +38,13 @@ int main(int argc, char **argv) {
         if (strcmp(argv[i],  "-f")==0) {
             filter = argv[i+1];
             i++;
+        }
+        if (strcmp(argv[i],  "-j")==0) {
+            queryJson = argv[i+1];
+            i++;
+        }
+        if (strcmp(argv[i],  "--first")==0) {
+            stopOnFirst = 1;
         }
         if (strcmp(argv[i],  "-d")==0) {
             deviceID = atoi(argv[i+1]);
@@ -226,7 +243,7 @@ int main(int argc, char **argv) {
     clErrCheck(err, "clCreateProgramWithSource - Creating OpenCL program");
 
     // Build the program
-    printf_s("Building program...\n");
+    if (!quiet) printf_s("Building program...\n");
     err = clBuildProgram(ssKernelProgram, 1, &device, include_path, NULL, NULL);
     if (err == CL_BUILD_PROGRAM_FAILURE) { //print build log on error
         size_t logLength = 0;
@@ -262,10 +279,43 @@ int main(int argc, char **argv) {
     err = clSetKernelArg(ssKernel, 2, sizeof(cl_mem), &cutoffBuf);
     clErrCheck(err, "clSetKernelArg - Adding cutoff argument");
 
+    // Build the structured query buffer (empty when -j is absent: numGroups=0,
+    // so query-aware filters match nothing). Args are always set since the
+    // kernel signature always declares them.
+    int emptyQuery[1] = {0};
+    int* queryData = emptyQuery;
+    int queryLen = 1;
+    if (queryJson != NULL) {
+        queryData = build_query_buffer(queryJson, &queryLen);
+        if (queryData == NULL) {
+            fprintf_s(stderr, "Failed to parse -j query JSON.\n");
+            return EXIT_FAILURE;
+        }
+    }
+    cl_mem queryBuf = clCreateBuffer(ctx, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int) * queryLen, queryData, &err);
+    clErrCheck(err, "clCreateBuffer - Creating query buffer");
+    err = clSetKernelArg(ssKernel, 3, sizeof(cl_mem), &queryBuf);
+    clErrCheck(err, "clSetKernelArg - Adding query argument");
+    err = clSetKernelArg(ssKernel, 4, sizeof(int), &queryLen);
+    clErrCheck(err, "clSetKernelArg - Adding query length argument");
+    if (queryData != emptyQuery) free(queryData);
+
+    // Early-exit flag: work-items poll this and bail once a match is claimed.
+    cl_int stopInit = 0;
+    cl_mem stopBuf = clCreateBuffer(ctx, CL_MEM_READ_WRITE, sizeof(cl_int), NULL, &err);
+    clErrCheck(err, "clCreateBuffer - Creating stop buffer");
+    clEnqueueWriteBuffer(queue, stopBuf, CL_TRUE, 0, sizeof(cl_int), &stopInit, 0, NULL, NULL);
+    err = clSetKernelArg(ssKernel, 5, sizeof(cl_mem), &stopBuf);
+    clErrCheck(err, "clSetKernelArg - Adding stop buffer argument");
+    err = clSetKernelArg(ssKernel, 6, sizeof(cl_int), &stopOnFirst);
+    clErrCheck(err, "clSetKernelArg - Adding stop-on-first argument");
+    err = clSetKernelArg(ssKernel, 7, sizeof(cl_int), &quiet);
+    clErrCheck(err, "clSetKernelArg - Adding quiet argument");
+
     // Execute OpenCL kernel
     size_t globalSize = numGroups * numGroups;
     size_t localSize = numGroups;
-    printf_s("Starting searcher...\n");
+    if (!quiet) printf_s("Starting searcher...\n");
     clock_t begin = clock();
     err = clEnqueueNDRangeKernel(queue, ssKernel, 1, NULL, &globalSize, &localSize, 0, NULL, NULL);
     clErrCheck(err, "clEnqueueNDRangeKernel - Executing OpenCL kernel");
@@ -279,7 +329,7 @@ int main(int argc, char **argv) {
     err = clReleaseContext(ctx);
     clock_t end = clock();
     double time_spent = (double)(end-begin) / CLOCKS_PER_SEC;
-    printf("Done in %fs",time_spent);
+    if (!quiet) printf("Done in %fs",time_spent);
 
     return EXIT_SUCCESS;
 }
