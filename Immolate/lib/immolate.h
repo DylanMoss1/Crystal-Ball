@@ -59,26 +59,48 @@ int str_contains_ci(const char* hay, const char* needle) {
 
 // Heuristic preference score for auto device selection (higher = better):
 //   - real GPUs beat CPUs and accelerators (+GPU_BONUS),
+//   - discrete GPUs beat integrated ones (+DISCRETE_BONUS): on laptops the
+//     Intel iGPU otherwise wins the cu*mhz tie-break despite the NVIDIA/AMD
+//     dGPU being far faster. "Integrated" = shares host memory
+//     (CL_DEVICE_HOST_UNIFIED_MEMORY) or carries a known iGPU name marker.
 //   - known software/emulation layers (OpenCLOn12, Microsoft Basic Render,
 //     llvmpipe, Oclgrind) are demoted below real hardware (-SOFT_PENALTY),
 //   - ties broken by compute_units * clock as a rough throughput proxy.
-// Demotion exceeds the GPU bonus, so e.g. Windows' OpenCLOn12 (a GPU-typed
-// software layer) loses to any real device while still winning if it is the
-// only device present.
+// DISCRETE_BONUS exceeds any plausible iGPU cu*mhz, so a dGPU always wins when
+// both are present. Demotion exceeds the GPU/discrete bonuses, so e.g. Windows'
+// OpenCLOn12 (a GPU-typed software layer) loses to any real device while still
+// winning if it is the only device present.
+// Deprecated in OpenCL 2.0, so omitted from headers at higher CL targets, but
+// every driver still answers the query. Stable value; define it if absent.
+#ifndef CL_DEVICE_HOST_UNIFIED_MEMORY
+#define CL_DEVICE_HOST_UNIFIED_MEMORY 0x1035
+#endif
 cl_long scoreDevice(cl_device_id dev) {
     cl_device_type type = 0;
     char name[1024] = {0}, vendor[1024] = {0};
     cl_uint cu = 0, mhz = 0;
+    cl_bool unified = CL_FALSE;
     clGetDeviceInfo(dev, CL_DEVICE_TYPE, sizeof type, &type, NULL);
     clGetDeviceInfo(dev, CL_DEVICE_NAME, sizeof name, name, NULL);
     clGetDeviceInfo(dev, CL_DEVICE_VENDOR, sizeof vendor, vendor, NULL);
     clGetDeviceInfo(dev, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof cu, &cu, NULL);
     clGetDeviceInfo(dev, CL_DEVICE_MAX_CLOCK_FREQUENCY, sizeof mhz, &mhz, NULL);
+    clGetDeviceInfo(dev, CL_DEVICE_HOST_UNIFIED_MEMORY, sizeof unified, &unified, NULL);
 
     const cl_long GPU_BONUS = 1000000000LL;
-    const cl_long SOFT_PENALTY = 2000000000LL;
+    const cl_long DISCRETE_BONUS = 4000000000LL;
+    const cl_long SOFT_PENALTY = 8000000000LL;
     cl_long score = (cl_long)cu * (cl_long)mhz;
     if (type & CL_DEVICE_TYPE_GPU) score += GPU_BONUS;
+
+    // Integrated GPUs share host memory; the name markers catch drivers that
+    // misreport unified memory (Intel HD/UHD/Iris, "Integrated").
+    const char* igpu[] = {"Iris", "UHD Graphics", "HD Graphics", "Integrated"};
+    int integrated = unified;
+    for (size_t i = 0; i < sizeof igpu / sizeof igpu[0]; i++) {
+        if (str_contains_ci(name, igpu[i])) { integrated = 1; break; }
+    }
+    if ((type & CL_DEVICE_TYPE_GPU) && !integrated) score += DISCRETE_BONUS;
 
     const char* software[] = {"OpenCLOn12", "clon12", "Basic Render",
                               "Microsoft", "llvmpipe", "Oclgrind"};

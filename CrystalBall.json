@@ -6,6 +6,7 @@
     "description": "Finds a seed matching structured criteria using the Immolate seed searcher, then starts a run on it.",
     "prefix": "crystalball",
     "main_file": "CrystalBall/src/CrystalBall.lua",
+    "icon_path": "crystal_ball.png",
     "priority": 0,
     "version": "0.1.0",
     "dependencies": ["Steamodded (>=1.0.0~BETA-0400a)"]

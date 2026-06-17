@@ -25,6 +25,7 @@ mod.config = mod.config or {}
 mod.config.stake = 1
 mod.config.timeout = 240 -- seconds to wait for the watcher
 mod.config.poll_frames = 15
+mod.config.debug = mod.config.debug or false -- logs deck-carousel state (see end of file)
 
 local HANDSHAKE_DIR = "/Mods/CrystalBall/CrystalBallHandshake"
 local REQUEST = HANDSHAKE_DIR .. "/request.txt"
@@ -184,7 +185,7 @@ local function run_immolate_windows(query)
 	love.filesystem.write(
 		WIN_BAT,
 		"@echo off\r\n"
-			.. string.format('"%s" -f %s --first -q -J "%s" > "%s"\r\n', exe, FILTER, qfile, out)
+			.. string.format('"%s" -f %s --first -q -s random -J "%s" > "%s"\r\n', exe, FILTER, qfile, out)
 			.. string.format('> "%s" echo %%errorlevel%%\r\n', done)
 	)
 
@@ -681,7 +682,14 @@ local function populate_joker_page(page)
 		end
 		area:emplace(card)
 	end
+	-- INIT_COLLECTION_CARD_ALERTS iterates G.your_collection (button_callbacks.lua:1197)
+	-- to alert newly-discovered cards. Scope our grid area to JUST this one-shot pass so
+	-- G.your_collection is never left clobbered for later screens -- the deck-select
+	-- carousel and the collection pages read it (and the stale value rendered cards wrong).
+	local saved_collection = G.your_collection
+	G.your_collection = { mod._grid_area }
 	INIT_COLLECTION_CARD_ALERTS()
+	G.your_collection = saved_collection
 end
 
 -- Paging callback for the picker's option cycle.
@@ -712,7 +720,6 @@ G.FUNCS.crystalball_picker_back = function(_)
 	end
 	mod._sel_area = nil
 	mod._grid_area = nil
-	G.your_collection = nil
 	mod._sel_highlighted = nil
 	mod._grid_highlighted = nil
 	mod._editing_clause = nil
@@ -783,9 +790,8 @@ function mod.show_joker_picker(idx)
 		{ card_limit = JOKERS_PER_PAGE, card_w = cw, type = "title_2", highlight_limit = 0, collection = true }
 	)
 	mod._grid_area.align_cards = grid_align_cards
-	-- INIT_COLLECTION_CARD_ALERTS iterates G.your_collection (button_callbacks.lua:1198);
-	-- register our single area there so win-sticker alerts initialise without crashing.
-	G.your_collection = { mod._grid_area }
+	-- (G.your_collection is set transiently around INIT_COLLECTION_CARD_ALERTS in
+	-- populate_joker_page; we no longer leave it pointing at our grid area.)
 	-- draw_layer defers this node's draw to after all normal overlay nodes
 	-- (ui.lua:295), so the grid - and the highlighted card's Add button hanging below
 	-- it - paints ON TOP of the page-cycle buttons instead of being covered by them.
@@ -1275,8 +1281,54 @@ function mod.config_tab()
 end
 
 G.FUNCS.crystalball_open_editor = function(_)
+	-- The editor is our own overlay, reached from the SMODS mod-config UI. overlay_menu
+	-- REPLACES that config overlay, and the editor's Back exits straight to the menu --
+	-- never through G.FUNCS.exit_mods (the mods-list Back), the ONLY place SMODS clears
+	-- G.ACTIVE_MOD_UI (ui.lua:1664). A dangling G.ACTIVE_MOD_UI then poisons
+	-- SMODS.collection_pool (utils.lua:1169): the deck pool filters to OUR (deckless) mod,
+	-- so the deck-select carousel resolves every deck to nil -> change_to(nil) -> Red Deck.
+	-- Drop the flag here: opening our editor means we've left the mod-collection context.
+	G.ACTIVE_MOD_UI = nil
 	mod._editor_page = 1
 	mod.show_filter_editor()
+end
+
+-- Mod menu (Mods > Crystal Ball) tab order/labels. Steamodded's create_UIBox_mods
+-- builds tabs in a fixed order -- mod-description first (labelled mod.name), then
+-- Config -- with no per-mod reorder hook. We intercept the single create_tabs call
+-- it makes (only while rendering OUR mod) to put Config first and relabel the
+-- description tab "About", then restore the global so other mods are untouched.
+local _orig_create_UIBox_mods = create_UIBox_mods
+function create_UIBox_mods(args)
+	if G.ACTIVE_MOD_UI ~= mod then
+		return _orig_create_UIBox_mods(args)
+	end
+	-- Open on Config, not the description tab. Steamodded picks the initial tab
+	-- from SMODS.LAST_SELECTED_MOD_TAB; forcing it here means each (re)open of
+	-- our mod lands on Config (in-session tab clicks still work as normal).
+	SMODS.LAST_SELECTED_MOD_TAB = "config"
+	local _orig_create_tabs = create_tabs
+	create_tabs = function(opts)
+		create_tabs = _orig_create_tabs -- single call; restore before delegating
+		local tabs = opts and opts.tabs
+		if tabs and tabs[1] then
+			tabs[1].label = "About" -- the mod-description tab is always first
+			local config_label = localize("b_config")
+			for i = 2, #tabs do
+				if tabs[i].label == config_label then
+					table.insert(tabs, 1, table.remove(tabs, i)) -- Config to front
+					break
+				end
+			end
+		end
+		return _orig_create_tabs(opts)
+	end
+	local ok, res = pcall(_orig_create_UIBox_mods, args)
+	create_tabs = _orig_create_tabs -- restore even if create_tabs was never called
+	if not ok then
+		error(res)
+	end
+	return res
 end
 
 --------------------------------------------------------------------------------
@@ -1330,3 +1382,62 @@ end
 
 -- One-time hint: where the watcher should point its --dir.
 sendInfoMessage("handshake dir: " .. love.filesystem.getSaveDirectory() .. "/" .. HANDSHAKE_DIR, "CrystalBall")
+
+--------------------------------------------------------------------------------
+-- Debug instrumentation (deck-carousel "all Red Deck" repro)
+--------------------------------------------------------------------------------
+-- Enable with: set mod.config.debug = true (one line above, or in the Lovely
+-- console: SMODS.Mods.CrystalBall.config.debug = true). Logs land in the Lovely
+-- log / console tagged "CrystalBall". Disambiguates the three live hypotheses:
+--   * every Back[].name == "Red Deck"   -> G.P_CENTER_POOLS.Back clobbered
+--   * pool fine but viewed_back stuck    -> change_viewed_back / cycle wiring
+--   * your_collection holds a joker area -> the (now-fixed) leak resurfacing
+
+-- Dump every global the deck-select sprite/label path reads (card.lua:213 and the
+-- UI_definitions deck carousels). `pool` also lists each Back center.
+function mod.debug_deck_state(tag, pool)
+	if not mod.config.debug then
+		return
+	end
+	local vb = G.GAME and G.GAME.viewed_back
+	local yc = G.your_collection
+	sendInfoMessage(
+		("deck_state[%s]: viewed_back=%s Back_pool=%s your_collection=%s MEMORY.deck=%s"):format(
+			tag,
+			vb and tostring(vb.name) or "nil",
+			G.P_CENTER_POOLS.Back and #G.P_CENTER_POOLS.Back or "nil",
+			(type(yc) == "table") and ("table[" .. #yc .. "]") or tostring(yc),
+			tostring(G.PROFILES[G.SETTINGS.profile].MEMORY.deck)
+		),
+		"CrystalBall"
+	)
+	if pool and G.P_CENTER_POOLS.Back then
+		for k, v in ipairs(G.P_CENTER_POOLS.Back) do
+			sendInfoMessage(
+				("  Back[%d] key=%s name=%s unlocked=%s"):format(k, tostring(v.key), tostring(v.name), tostring(v.unlocked)),
+				"CrystalBall"
+			)
+		end
+	end
+end
+
+-- Baseline the pool when a deck carousel is built, and log the viewed deck on
+-- every scroll -- the two moments that pin which global is wrong.
+local _dbg_change_viewed_back = G.FUNCS.change_viewed_back
+G.FUNCS.change_viewed_back = function(args)
+	local r = _dbg_change_viewed_back(args)
+	mod.debug_deck_state("scroll to_key=" .. tostring(args and args.to_key), false)
+	return r
+end
+
+local _dbg_run_setup_option = G.UIDEF.run_setup_option
+function G.UIDEF.run_setup_option(...)
+	mod.debug_deck_state("run_setup_option", true)
+	return _dbg_run_setup_option(...)
+end
+
+local _dbg_decks_collection = create_UIBox_your_collection_decks
+function create_UIBox_your_collection_decks(...)
+	mod.debug_deck_state("decks_collection", true)
+	return _dbg_decks_collection(...)
+end
