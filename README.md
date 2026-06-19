@@ -28,22 +28,25 @@ bash "${STEAM_COMPAT_DATA_PATH}/pfx/drive_c/users/steamuser/AppData/Roaming/Bala
 ## Usage
 
 > [!WARNING]
-> The first seed search will take a long time (and may crash / timeout). 
+> The first seed search will take a long time (and may crash / timeout).
 > This is expected while the search searcher compiles, subsequent runs will be _much_ faster.
 
-**Non-legendary Jokers:** Can be found in shop and buffoon packs. Number of re-rolls scales per ante (ante 1 assumes 0 re-rolls, ante 2 assumes 1 re-roll, etc.).
+**Non-legendary Jokers:** 
+- Found in shop & buffoon packs.
+- Number of re-rolls scales per ante
+  - Ante 1 ⇒ 0 re-rolls
+  - Ante 2 ⇒ 1 re-roll
+  - etc.
 
-Non-legendary jokers can be found in shop (either as buyable jokers or in buffoon packs). The number of re-rolls per ante = `(ante - 1)`.
+**Legendary Jokers:**
+- Found in arcana & spectral packs.
 
-Legendary jokers can be found in shop arcana / spectral packs.
+This mod does not search for jokers found via skip vouchers.
 
-This mod does not search for packs obtained from tags.
+## Future Plans
 
-## Future Work
-
-Currently this mod only supports jokers, but there are future plans to support vouchers and other cards.
-
-There are plans to add custom configuration options (such as number of re-rolls per ante, and adjustable search timeouts).
+- Search for vouchers / spectral cards / playing cards
+- Customisation options (custom re-rolls per ante, adjustable search timeouts, etc.)
 
 ## Thanks
 
