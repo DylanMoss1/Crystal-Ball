@@ -39,7 +39,7 @@ bash "${STEAM_COMPAT_DATA_PATH}/pfx/drive_c/users/steamuser/AppData/Roaming/Bala
 **Legendary Jokers:**
 - Found in arcana & spectral packs.
 
-This mod does not search for jokers found using skip vouchers.
+This mod does not search for jokers found in skip vouchers packs.
 
 ## Future Plans
 
