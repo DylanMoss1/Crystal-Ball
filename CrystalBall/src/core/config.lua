@@ -7,7 +7,6 @@ return function(ctx)
 
 	mod.config = mod.config or {}
 	mod.config.stake = 1
-	mod.config.timeout = 240 -- seconds to wait for the watcher
 	mod.config.poll_frames = 15
 	mod.config.debug = mod.config.debug or false -- see core/debug.lua
 
@@ -72,7 +71,7 @@ return function(ctx)
 
 	-- Async search state, resolved through mod.poll (core/handshake.lua).
 	mod.last_seed = nil
-	mod.pending = nil -- { id, frames, started }
+	mod.pending = nil -- { id, frames }
 	mod.deferred = nil -- { e, args } captured from start_run while searching
 	mod.resolving = false
 end

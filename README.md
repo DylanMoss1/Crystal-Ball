@@ -28,8 +28,18 @@ bash "${STEAM_COMPAT_DATA_PATH}/pfx/drive_c/users/steamuser/AppData/Roaming/Bala
 ## Usage
 
 > [!WARNING]
-> The first time the mod is ran, it will take a long time to find a seed. If the search timeout is exceeded YOU MUST EXIT AND REOPEN BALATRO.
-> After the first search, subsequent runs will be _much_ faster.
+> Expect the **first** seed search to take a very long time (>1 min) in order to compile the backend.
+> Subsequent searches will be _much_ faster.
+
+1. Go to `Mods -> Crystal Ball -> Edit seed filter`
+2. Add a new filter with `Add row`
+3. Configure the filter
+    - Select the min/max ante the jokers will appear (inclusive)
+    - Select the _minimum_ number of jokers that must be found (or `All` to search for all selected jokers)
+5. Start a new game as normal
+    - Expect the first seed search to take a long time
+
+### Where Can Jokers Be Found?
 
 **Non-legendary Jokers:** 
 - Found in shop & buffoon packs.
@@ -44,7 +54,13 @@ This mod does not search for jokers found in skip vouchers packs.
 ## Future Plans
 
 - Search for vouchers / spectral cards / playing cards
-- Customisation options (custom re-rolls per ante, adjustable search timeouts, etc.)
+- Customisation options (custom re-rolls per ante, search timeouts, etc.)
+- Support for Showman / duplicate jokers
+- Support for Cavendish
+- Prevent jokers from appearing in the same pack
+- Prevent the selection of locked jokers
+- Option to fix the order in which jokers appear
+- Option to define/select multiple filter sets
 
 ## Thanks
 

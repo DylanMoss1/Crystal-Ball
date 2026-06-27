@@ -1,6 +1,6 @@
 -- Regression tests for the mod-side handshake state machine: request_seed writes
 -- the request file the watcher reads, and poll() resolves the watcher's response
--- (seed / ERROR / timeout). Drives the REAL functions against the stub's
+-- (seed / ERROR). Drives the REAL functions against the stub's
 -- in-memory filesystem (CB_FS) -- no game, no watcher, no GPU.
 --
 -- The stub forces the Linux (watcher) path (jit.os = "Linux"), so request_seed
@@ -64,11 +64,5 @@ CB_FS[RESPONSE] = "some-other-id\nWRONG\n"
 pump()
 T.ok("mismatched id keeps pending", mod.pending ~= nil)
 T.ok("mismatched id adopts no seed", mod.last_seed == nil)
-
--- 5. No response before config.timeout elapses -> the search times out.
-reset()
-mod.pending = { id = "t-1", frames = 0, started = os.time() - (mod.config.timeout + 5) }
-pump()
-T.ok("timeout clears pending", mod.pending == nil)
 
 T.finish()

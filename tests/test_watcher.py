@@ -131,12 +131,12 @@ class WatcherTest(unittest.TestCase):
 class RunImmolateUnitTest(unittest.TestCase):
     """Direct unit tests of watcher.run_immolate against the fake searcher."""
 
-    def _run(self, mode, timeout=30.0, env_extra=None):
+    def _run(self, mode, env_extra=None):
         prev = dict(os.environ)
         os.environ["FAKE_MODE"] = mode
         os.environ.update(env_extra or {})
         try:
-            return watcher.run_immolate(str(FAKE), "find_joker", "{}", timeout)
+            return watcher.run_immolate(str(FAKE), "find_joker", "{}")
         finally:
             os.environ.clear()
             os.environ.update(prev)
@@ -156,11 +156,6 @@ class RunImmolateUnitTest(unittest.TestCase):
         seed, err = self._run("fail")
         self.assertIsNone(seed)
         self.assertEqual(err, "simulated search failure")
-
-    def test_timeout_is_reported(self):
-        seed, err = self._run("slow", timeout=0.3, env_extra={"FAKE_SLEEP": "5"})
-        self.assertIsNone(seed)
-        self.assertTrue(err)  # a TimeoutExpired message, surfaced verbatim
 
 
 if __name__ == "__main__":

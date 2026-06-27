@@ -82,7 +82,7 @@ return function(ctx)
 		love.filesystem.createDirectory(HANDSHAKE_DIR)
 		love.filesystem.remove(RESPONSE) -- drop any stale result
 		love.filesystem.write(REQUEST, id .. "\n" .. query .. "\n")
-		mod.pending = { id = id, frames = 0, started = os.time() }
+		mod.pending = { id = id, frames = 0 }
 
 		if is_native_windows() then
 			local ok, err = run_immolate_windows(query)
@@ -156,12 +156,6 @@ return function(ctx)
 				end
 				return
 			end
-		end
-
-		if os.time() - p.started > mod.config.timeout then
-			mod.pending = nil
-			toast("Seed search timed out")
-			on_resolved(nil)
 		end
 	end
 

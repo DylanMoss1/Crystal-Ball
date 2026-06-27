@@ -9,7 +9,6 @@ Behaviour is selected by env var FAKE_MODE:
     multi            -> print several lines (watcher must take the first)
     empty            -> print nothing, exit 0  (no matching seed)
     fail             -> write stderr, exit 1    (search error)
-    slow             -> sleep, then succeed     (for timeout tests)
 
 Every invocation appends its argv (one JSON line) to $FAKE_LOG if set, so tests
 can spy on how many times -- and with what query -- the watcher ran it.
@@ -34,9 +33,6 @@ def main() -> int:
         return 1
     if mode == "empty":
         return 0
-    if mode == "slow":
-        import time
-        time.sleep(float(os.environ.get("FAKE_SLEEP", "5")))
     if mode == "multi":
         print(FIXED_SEED)
         print("SECONDONE")

@@ -20,12 +20,15 @@ import subprocess
 import time
 
 
-def run_immolate(binary, filt, query, timeout):
-    """returns: (seed, None) on success, or (None, error_message)."""
+def run_immolate(binary, filt, query):
+    """returns: (seed, None) on success, or (None, error_message).
+
+    Runs with no timeout: the search is allowed to take as long as it needs.
+    """
     cmd = [binary, "-f", filt, "--first", "-q", "-s", "random", "-j", query]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-    except Exception as e:  # noqa: BLE001 - report any spawn/timeout failure verbatim
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+    except Exception as e:  # noqa: BLE001 - report any spawn failure verbatim
         return None, str(e)
     if proc.returncode != 0:
         return None, (proc.stderr.strip() or f"exit {proc.returncode}")
@@ -41,7 +44,6 @@ def main():
     ap.add_argument("--immolate", required=True, help="path to the Immolate binary")
     ap.add_argument("--filter", default="find_joker")
     ap.add_argument("--interval", type=float, default=0.1, help="poll seconds")
-    ap.add_argument("--search-timeout", type=float, default=600.0)
     args = ap.parse_args()
 
     os.makedirs(args.dir, exist_ok=True)
@@ -75,7 +77,7 @@ def main():
             continue
         last_id = rid
 
-        seed, err = run_immolate(args.immolate, args.filter, query, args.search_timeout)
+        seed, err = run_immolate(args.immolate, args.filter, query)
         payload = seed if seed else f"ERROR: {err}"
 
         # Atomic write so the mod never reads a half-written file.
