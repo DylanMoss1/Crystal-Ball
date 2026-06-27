@@ -10,15 +10,15 @@ https://github.com/user-attachments/assets/7027d0c5-a9bc-4c73-bbf7-b06c00de24ad
 
 ### Windows
 
-1. Install `Lovely` and `smods` (see [Balatro Modding Guide](https://steamcommunity.com/sharedfiles/filedetails/?id=3400691352)).
-2. Download the latest `CrystalBall-windows.zip` [release](https://github.com/DylanMoss1/CrystalBall/releases/latest).
-3. Extract the zip file into its own folder inside your Balatro mods folder (`%appdata%\Balatro\Mods`).
+1. Install `Lovely` and `smods` (see [Balatro Modding Guide](https://steamcommunity.com/sharedfiles/filedetails/?id=3400691352))
+2. Download the latest `CrystalBall-windows.zip` [release](https://github.com/DylanMoss1/CrystalBall/releases/latest)
+3. Extract the zip file into its own folder inside your Balatro mods folder (`%appdata%\Balatro\Mods`)
 
 ### Linux (Proton)
 
-1. Install `Lovely` and `smods` (see [Linux Balatro Modding Guide](https://gist.github.com/pjobson/b33bd7798271e07d6a4aec9120056395)).
-2. Download the latest `CrystalBall-linux-proton.zip` [release](https://github.com/DylanMoss1/CrystalBall/releases/latest).
-3. Extract the zip file into its own folder inside your Balatro mods folder (`~/.local/share/Steam/steamapps/compatdata/2379780/pfx/drive_c/users/steamuser/AppData/Roaming/Balatro/Mods`).
+1. Install `Lovely` and `smods` (see [Linux Balatro Modding Guide](https://gist.github.com/pjobson/b3bd7798271e07d6a4aec9120056395)).
+2. Download the latest `CrystalBall-linux-proton.zip` [release](https://github.com/DylanMoss1/CrystalBall/releases/latest)
+3. Extract the zip file into its own folder inside your Balatro mods folder (`~/.local/share/Steam/steamapps/compatdata/2379780/pfx/drive_c/users/steamuser/AppData/Roaming/Balatro/Mods`)
 4. Set the Steam Balatro launch options (`Balatro → Properties → Launch Options`) to:
 
 ```
@@ -42,7 +42,7 @@ bash "${STEAM_COMPAT_DATA_PATH}/pfx/drive_c/users/steamuser/AppData/Roaming/Bala
 
 **Non-legendary Jokers:**
 - Found in shop & buffoon packs
-- Number of re-rolls scales per ante:
+- Number of shop re-rolls scales per ante:
   - Ante 1 ⇒ 0 re-rolls, Ante 2 ⇒ 1 re-roll, etc.
 
 **Legendary Jokers:**
