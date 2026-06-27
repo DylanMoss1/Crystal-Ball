@@ -56,7 +56,6 @@ This mod does **not** search for jokers from another other sources, including sk
 - Customisation options (custom re-rolls per ante, search timeouts, etc.)
 - Support for Showman / duplicate jokers
 - Prevent searched jokers from appearing in the same pack
-- Prevent the selection of locked jokers
 - Option to fix the order in which jokers appear
 - Option to create/select multiple filter sets
 

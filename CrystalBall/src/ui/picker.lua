@@ -26,6 +26,12 @@ return function(ctx)
 		return center and center.key and JOKER_NAMES[center.key] or nil
 	end
 
+	-- Unlocked iff the game would not draw the j_locked sprite (see card.lua set_sprites).
+	-- Locked jokers stay visible in the grid but can't be highlighted or added.
+	local function is_unlocked(center)
+		return center and center.unlocked ~= false
+	end
+
 	local function selected_index(key)
 		for i, k in ipairs(mod.picker_keys) do
 			if k == key then
@@ -130,6 +136,10 @@ return function(ctx)
 		local name = joker_name_of(center)
 		if not name then
 			play_sound("cancel")
+			return
+		end
+		if not is_unlocked(center) then
+			play_sound("cancel") -- locked joker; not yet unlocked on this profile
 			return
 		end
 		if selected_index(center.key) then
@@ -245,9 +255,13 @@ return function(ctx)
 			local card = Card(area.T.x, area.T.y, GRID_SCALE * G.CARD_W, GRID_SCALE * G.CARD_H, G.P_CARDS.empty, center)
 			card.sticker = get_joker_win_sticker(center)
 			card.crystalball_grid = true
-			card.states.click.can = true -- collection cards aren't clickable by default
-			card.click = function(self)
-				toggle_highlight(self, mod, "_grid_highlighted")
+			-- Locked jokers render (as the j_locked sprite) but stay unclickable, so the Add
+			-- button never surfaces -- can't select a joker you haven't unlocked.
+			if is_unlocked(center) then
+				card.states.click.can = true -- collection cards aren't clickable by default
+				card.click = function(self)
+					toggle_highlight(self, mod, "_grid_highlighted")
+				end
 			end
 			area:emplace(card)
 		end

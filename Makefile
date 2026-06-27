@@ -4,6 +4,7 @@
 #   make build_windows   Windows .exe via MinGW cross-compile (see note below)
 #   make build           both
 #   make test            Lua + Python regression suite (tests/run.sh)
+#   make clean           remove the Immolate build dirs (Linux + Windows)
 #
 # build_windows cross-compiles from Linux (needs a MinGW toolchain + OpenCL import
 # lib; errors clearly if absent). The shipped .exe is normally cut by CI instead.
@@ -13,7 +14,7 @@ LINUX_BUILD  := $(IMMOLATE_SRC)/build
 WIN_BUILD    := $(IMMOLATE_SRC)/build-windows
 MINGW        := x86_64-w64-mingw32
 
-.PHONY: build build_linux build_windows test
+.PHONY: build build_linux build_windows test clean
 
 build: build_linux build_windows
 
@@ -49,3 +50,6 @@ build_windows:
 
 test:
 	bash tests/run.sh
+
+clean:
+	rm -rf $(LINUX_BUILD) $(WIN_BUILD)
